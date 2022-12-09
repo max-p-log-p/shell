@@ -1,0 +1,75 @@
+#!/bin/bash
+host='libera75jm6of4wxpxt4aynol3xjmbtxgfyjpu34ss4d7r7q2v5zrpyd.onion'
+port='6697'
+user=seL4
+pem='/etc/ssl/irc.libera.chat/libera.pem'
+auth=1
+ssl=1
+
+while getopts ":h:p:a:su:" opt;
+do
+    case ${opt} in 
+    a)
+	auth=$OPTARG;;
+    h) 
+	host=$OPTARG;;
+    p)	
+	port=$OPTARG;;
+    s)
+    	ssl=0
+	port=6667;;
+    u)
+    	user=$OPTARG;;
+    \?)
+	echo "usage: $0 [-s] [-a auth] [-h host] [-p port] [-u user]"
+	exit 1;;
+    esac
+done
+
+case "$auth" in 
+"0")
+	;;
+"1")
+	startup="CAP REQ :sasl\n"
+	startup+="AUTHENTICATE EXTERNAL\n"
+	startup+="AUTHENTICATE +\n"
+	startup+="CAP END\n";;
+"2")
+	stty -echo
+	read -r -p "Password: " pass
+	stty echo
+	echo
+	startup="PASS $pass\n"
+	;;
+*)
+	echo "auth types: N/A (0), CERT (1), PASSWORD (2)"
+	exit 1
+	;;
+esac
+
+startup+="NICK $user\n"
+startup+="USER $user 8 * :$user\n"
+
+(printf "$startup"; while read -e; do echo "$REPLY"; done) | {
+	if [[ "$ssl" == "1" ]]; then
+		if [[ "$auth" == "1" ]]; then
+			openssl s_client -quiet -cert "$pem" "$host:$port" &
+		else
+			openssl s_client "$host:$port" &
+		fi
+	else
+		nc "$host" "$port" &
+	fi 
+	echo "$!"
+} | {
+	read -r PID
+	
+	while IFS= read -r;
+	do
+		if [ "${REPLY:0:4}" = "PING" ]; then
+			echo "PONG${REPLY:4}" > /proc/"$PID"/fd/0
+		else
+			echo "$REPLY"
+		fi
+	done
+}
