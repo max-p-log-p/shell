@@ -1,0 +1,83 @@
+#!/bin/sh
+host='disroot.org'
+user='sel4'
+port=465
+
+usage() {
+	echo "usage: $0 <rcpt> [-f file] [-h host] [-m message] [-p port] [-s subject] [-u user]"
+	exit 1
+}
+
+if [ -z "$1" ]; then
+	usage
+else
+	rcpt="$1"
+	shift 1
+fi
+
+while getopts ":f:h:m:p:s:u:" opt
+do
+    case ${opt} in 
+    f) 
+	file=$OPTARG;;
+    h) 
+	host=$OPTARG;;
+    m)	
+	msg=$OPTARG;;
+    p)	
+	port=$OPTARG;;
+    s)	
+	subject=$OPTARG;;
+    u)
+    	user=$OPTARG;;
+    \?)
+	usage;;
+    esac
+done
+
+stty -echo
+printf 'Password: '
+read -r pass
+echo
+stty echo
+
+coproc torsocks openssl s_client -quiet "$host:$port"
+
+echo "HELO $host" >& "${COPROC[1]}"
+read -r <& "${COPROC[0]}"
+echo "$REPLY"
+
+base64=$(perl -MMIME::Base64 -e "print(encode_base64(\"\000$user\000$pass\"))")
+echo "AUTH PLAIN $base64" >& "${COPROC[1]}"
+read -r <& "${COPROC[0]}"
+echo "$REPLY"
+
+echo "MAIL FROM: <$user@$host>" >& "${COPROC[1]}"
+read -r <& "${COPROC[0]}"
+echo "$REPLY"
+
+echo "RCPT TO: <$rcpt>" >& "${COPROC[1]}"
+read -r <& "${COPROC[0]}"
+echo "$REPLY"
+
+echo DATA >& "${COPROC[1]}"
+read -r <& "${COPROC[0]}"
+echo "$REPLY"
+
+echo "$(date)" >& "${COPROC[1]}"
+
+if [ -n "$subject" ]; then
+	echo "Subject: $subject" >& "${COPROC[1]}"
+fi
+
+if [ -n "$file" ]; then
+	cat "$file" >& "${COPROC[1]}"
+fi
+
+if [ -n "$msg" ]; then
+	echo "$msg" >& "${COPROC[1]}"
+fi
+
+printf '\n.\n' >& "${COPROC[1]}"
+read -r <& "${COPROC[0]}"
+echo "$REPLY"
