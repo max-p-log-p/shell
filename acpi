@@ -1,0 +1,9 @@
+#!/bin/sh
+
+while true;
+do
+	if [ "$(cat /proc/acpi/button/lid/LID0/state)" = "state:      closed" ]; then
+		tmux lock-session
+	fi
+	sleep 5
+done
