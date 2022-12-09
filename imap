@@ -1,0 +1,21 @@
+#!/bin/sh
+host="disroot.org"
+port=993
+user="sel4"
+
+stty -echo
+read -r -p "Password: " pass
+echo
+stty echo
+
+base64=$(perl -MMIME::Base64 -e "print(encode_base64(\"\000$user\000$pass\"))")
+tag="A"
+
+(
+	echo "$tag AUTHENTICATE PLAIN $base64"
+	echo "$tag SELECT INBOX"
+	while read -e; 
+	do 
+		echo "$tag $REPLY"
+	done 
+) | torsocks openssl s_client -quiet "$host:$port"
