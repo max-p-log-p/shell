@@ -1,12 +1,17 @@
 #!/bin/sh
+name="rk817-battery"
+path="/sys/class/power_supply/$name"
 
-read full < /sys/class/power_supply/rk817-battery/charge_full_design
+read full < "$path/charge_full_design"
 
 while true;
 do
-	read charge < /sys/class/power_supply/rk817-battery/charge_now
-	if [ $(($charge * 100 / $full)) -lt 10 ] && [ "$(cat /sys/class/power_supply/rk817-battery/status)" = "Discharging" ]; then
+	read charge < "$path/charge_now"
+	read status < "$path/status"
+
+	if [ $(($charge * 100 / $full)) -lt 10 ] && [ "$status" = "Discharging" ]; then
 		tmux display-message "Battery low"
 	fi
+
 	sleep 30;
 done
